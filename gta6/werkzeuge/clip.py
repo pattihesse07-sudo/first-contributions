@@ -132,9 +132,17 @@ def schneiden(quelle, roh, layout, cam, dauer):
         # Werte gelten für 1920x1080; auf echte Auflösung umrechnen
         f = w / 1920
         cx, cy, cw, ch = (int(round(x * f)) for x in (cx, cy, cw, ch))
-        fc = (f"[0:v]crop={cw}:{ch}:{cx}:{cy},scale=1080:608:force_original_aspect_ratio=increase,"
-              f"crop=1080:608,setsar=1[cam];[0:v]scale=1080:1312:force_original_aspect_ratio=increase,"
-              f"crop=1080:1312,setsar=1[spiel];[cam][spiel]vstack[v]")
+        # Kamerastreifen so hoch wie das Seitenverhältnis des Ausschnitts (gerade Zahl, 480 bis 960)
+        kh = min(960, max(480, int(round(1080 * ch / cw / 2)) * 2))
+        sh = 1920 - kh
+        # Spielbild ohne die Original-Kamera: Kamera rechts -> nur links davon, Kamera links -> rechts davon
+        if cx + cw / 2 > w / 2:
+            spiel = f"crop={cx}:{h}:0:0,"
+        else:
+            spiel = f"crop={w - cx - cw}:{h}:{cx + cw}:0,"
+        fc = (f"[0:v]crop={cw}:{ch}:{cx}:{cy},scale=1080:{kh}:force_original_aspect_ratio=increase,"
+              f"crop=1080:{kh},setsar=1[cam];[0:v]{spiel}scale=1080:{sh}:force_original_aspect_ratio=increase,"
+              f"crop=1080:{sh},setsar=1[spiel];[cam][spiel]vstack[v]")
         args = ["-filter_complex", fc, "-map", "[v]", "-map", "0:a?"]
     run(["ffmpeg", "-n", "-v", "error", "-i", str(quelle), *args, "-t", str(dauer),
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
@@ -176,7 +184,8 @@ def main():
     ass_schreiben(woerter, ass)
     run(["ffmpeg", "-n", "-v", "error", "-i", roh.name, "-vf", f"ass={ass.name}",
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-         "-c:a", "copy", "-movflags", "+faststart", fertig.name], cwd=CLIPS)
+         "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000",
+         "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", fertig.name], cwd=CLIPS)
 
     info = probe(fertig)
     v = next(s for s in info["streams"] if s["codec_type"] == "video")
