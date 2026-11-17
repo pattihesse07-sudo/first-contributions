@@ -94,7 +94,7 @@ def hook_zeilen(hook, dauer=3.0):
     return stil, f"Dialogue: 1,{ass_zeit(0)},{ass_zeit(dauer)},Hook,,0,0,0,,{{\\fad(0,250)}}{text}"
 
 
-def ass_schreiben(woerter, pfad, max_woerter=3, hook=None):
+def ass_schreiben(woerter, pfad, max_woerter=3, hook=None, credit=None):
     kopf = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -108,6 +108,15 @@ Style: Cap,DejaVu Sans,96,&H00FFFFFF,&H0000FFFF,&H00000000,&H64000000,1,0,0,0,10
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+    # Whisper liefert manchmal doppelte oder rückwärts laufende Zeiten: sortieren, Doppelte entfernen
+    sauber = []
+    for w in sorted(woerter, key=lambda x: x["s"]):
+        if sauber and w["s"] < sauber[-1]["e"] - 0.05 and w["w"].lower() == sauber[-1]["w"].lower():
+            continue
+        if sauber and w["s"] < sauber[-1]["s"] + 0.02:
+            w = dict(w, s=sauber[-1]["s"] + 0.02)
+        sauber.append(w)
+    woerter = sauber
     gruppen, akt = [], []
     for w in woerter:
         if akt and (len(akt) >= max_woerter or w["s"] - akt[-1]["e"] > 0.6
@@ -126,11 +135,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             text = " ".join(
                 ("{\\c&H0000FFFF&}" + x["w"].upper() + "{\\c&H00FFFFFF&}") if j == i else x["w"].upper()
                 for j, x in enumerate(g))
-            zeilen.append(f"Dialogue: 0,{ass_zeit(w['s'])},{ass_zeit(ende)},Cap,,0,0,0,,{text}")
+            zeilen.append((w["s"], ende, text))
+    # Keine zwei Untertitel gleichzeitig: jedes Ende spätestens beim nächsten Start
+    zeilen.sort(key=lambda z: z[0])
+    zeilen = [f"Dialogue: 0,{ass_zeit(s)},{ass_zeit(min(e, zeilen[i + 1][0]) if i + 1 < len(zeilen) else e)},"
+              f"Cap,,0,0,0,,{t}" for i, (s, e, t) in enumerate(zeilen)]
     if hook:
         stil, zeile = hook_zeilen(hook)
         kopf = kopf.replace("\n[Events]", stil + "\n[Events]")
         zeilen.append(zeile)
+    if credit:
+        stil = ("Style: Credit,DejaVu Sans,40,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,"
+                "100,100,0,0,1,3,1,2,40,40,70,1\n")
+        kopf = kopf.replace("\n[Events]", stil + "\n[Events]")
+        ende = max((w["e"] for w in woerter), default=0) + 5
+        zeilen.append(f"Dialogue: 2,{ass_zeit(0)},{ass_zeit(max(ende, 600))},Credit,,0,0,0,,{credit}")
     pfad.write_text(kopf + "\n".join(zeilen) + "\n", encoding="utf-8")
 
 
@@ -176,6 +195,7 @@ def main():
     ap.add_argument("--hoehe", type=int, default=1080)
     ap.add_argument("--mindestlaenge", type=float, default=61,
                     help="Kürzere Clips so oft wiederholen, bis sie länger sind (Sekunden, 0 = aus)")
+    ap.add_argument("--credit", default=None, help="Quellenangabe, die durchgehend unten steht")
     ap.add_argument("--hook", default=None, help="Hook-Text für die ersten 3 Sekunden (\\n = Zeilenumbruch)")
     a = ap.parse_args()
 
@@ -218,7 +238,7 @@ def main():
                    for k in range(durchlaeufe) for w in woerter]
         print(f"Clip {roh_dauer:.1f}s -> {durchlaeufe}x abgespielt = {durchlaeufe * roh_dauer:.1f}s")
     ass.unlink(missing_ok=True)
-    ass_schreiben(woerter, ass, hook=a.hook)
+    ass_schreiben(woerter, ass, hook=a.hook, credit=a.credit)
     run(["ffmpeg", "-n", "-v", "error", "-i", basis.name, "-vf", f"ass={ass.name}",
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
          "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000",
