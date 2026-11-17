@@ -77,6 +77,29 @@ def transkript(quelle, sprache, modell, env):
     return info.language, woerter
 
 
+def laut_spitzen(pfad, anzahl, start_ab=0.0, abstand=6.0):
+    """Startzeiten der lautesten Sekunden (für Zooms), mindestens `abstand` Sekunden auseinander."""
+    import numpy as np
+    roh = subprocess.run(["ffmpeg", "-v", "error", "-i", str(pfad), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
+                         capture_output=True, check=True).stdout
+    x = np.frombuffer(roh, dtype=np.int16).astype(np.float32) / 32768
+    sr = 4000  # halbe Sekunden
+    n = len(x) // sr
+    if n < 4:
+        return []
+    db = 20 * np.log10(np.sqrt((x[:n * sr].reshape(n, sr) ** 2).mean(1)) + 1e-9)
+    wahl = []
+    for i in np.argsort(db)[::-1]:
+        t = i * 0.5
+        if t < start_ab or t > n * 0.5 - 1.5:
+            continue
+        if all(abs(t - w) >= abstand for w in wahl):
+            wahl.append(t)
+        if len(wahl) == anzahl:
+            break
+    return sorted(wahl)
+
+
 def ass_zeit(t):
     t = max(t, 0)
     h, r = divmod(t, 3600)
@@ -186,22 +209,23 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("link")
     ap.add_argument("start", help="z. B. 00:12:30")
-    ap.add_argument("ende", help="z. B. 00:13:15 (15 bis 60 Sekunden nach start)")
+    ap.add_argument("ende", help="z. B. 00:13:15 (20 bis 60 Sekunden nach start)")
     ap.add_argument("--nr", required=True, help="Clipnummer, z. B. 01")
     ap.add_argument("--layout", choices=["voll", "cam"], default="voll")
     ap.add_argument("--cam", default="0,0,480,270", help="Kamera x,y,b,h im 1920x1080-Bild")
     ap.add_argument("--sprache", default=None, help="de oder en; leer = automatisch")
     ap.add_argument("--modell", default="small", help="Whisper-Modell (tiny, base, small)")
     ap.add_argument("--hoehe", type=int, default=1080)
-    ap.add_argument("--mindestlaenge", type=float, default=61,
+    ap.add_argument("--zooms", type=int, default=3, help="Anzahl Punch-in-Zooms an lauten Stellen (0 = aus)")
+    ap.add_argument("--mindestlaenge", type=float, default=0,
                     help="Kürzere Clips so oft wiederholen, bis sie länger sind (Sekunden, 0 = aus)")
     ap.add_argument("--credit", default=None, help="Quellenangabe, die durchgehend unten steht")
     ap.add_argument("--hook", default=None, help="Hook-Text für die ersten 3 Sekunden (\\n = Zeilenumbruch)")
     a = ap.parse_args()
 
     dauer = sek(a.ende) - sek(a.start)
-    if not 15 <= dauer <= 60:
-        sys.exit(f"Dauer {dauer:.1f}s liegt nicht bei 15 bis 60 Sekunden.")
+    if not 20 <= dauer <= 60:
+        sys.exit(f"Dauer {dauer:.1f}s liegt nicht bei 20 bis 60 Sekunden.")
     for tool in ("yt-dlp", "ffmpeg", "ffprobe"):
         if not shutil.which(tool):
             sys.exit(f"{tool} fehlt im PATH.")
@@ -239,7 +263,16 @@ def main():
         print(f"Clip {roh_dauer:.1f}s -> {durchlaeufe}x abgespielt = {durchlaeufe * roh_dauer:.1f}s")
     ass.unlink(missing_ok=True)
     ass_schreiben(woerter, ass, hook=a.hook, credit=a.credit)
-    run(["ffmpeg", "-n", "-v", "error", "-i", basis.name, "-vf", f"ass={ass.name}",
+    vf = f"ass={ass.name}"
+    if a.zooms:
+        spitzen = laut_spitzen(basis, a.zooms, start_ab=2.5)
+        if spitzen:
+            z = "+".join(f"between(t,{s:.2f},{s + 1.2:.2f})" for s in spitzen)
+            # Punch-in: Bild bei lauten Stellen kurz um 12 % heranzoomen, dann Untertitel darüber
+            vf = (f"scale=w='trunc(1080*(1+0.12*({z}))/2)*2':h='trunc(1920*(1+0.12*({z}))/2)*2'"
+                  f":eval=frame,crop=1080:1920,setsar=1,{vf}")
+            print("Zooms bei", ", ".join(f"{s:.1f}s" for s in spitzen))
+    run(["ffmpeg", "-n", "-v", "error", "-i", basis.name, "-vf", vf,
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
          "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000",
          "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", fertig.name], cwd=CLIPS)
