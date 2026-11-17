@@ -52,6 +52,13 @@ die Antwort aber je Streamer sagen, für wen sie gilt.
 |---|---|---|---|
 | 17.11.2026 | business@trymacs.de | Trymacs | gesendet per Gmail, Antwort offen |
 | 17.11.2026 | hey@gronkh.tv | GRONKH | gesendet per Gmail, Antwort offen |
+| 17.11.2026 | Business@rohat.gg | xRohat | gesendet per Gmail, Antwort offen (Adresse aus Profil laut stats.1up.vision) |
+| 17.11.2026 | tolkin@ins.gg | Tolkin | gesendet per Gmail, Antwort offen (Adresse aus Profil laut stats.1up.vision) |
+| 17.11.2026 | nooreax@ciberdime.com | Noreax | gesendet per Gmail, Antwort offen (Adresse aus Profil laut stats.1up.vision) |
+| 17.11.2026 | business@sturmwaffel.de | Sturmwaffel | gesendet per Gmail, Antwort offen (Twitch-Bio; Top-50-Platz nicht geprüft) |
+| 17.11.2026 | fibi@fullstreaming.online | Fibii | gesendet per Gmail, Antwort offen (Twitch-Bio; Top-50-Platz nicht geprüft) |
+| offen | instinct3.de Kontaktformular | HandOfBlood, Maxim, Sterzik | selbst ausfüllen: https://instinct3.de/ |
+| offen | keine öffentliche Adresse gefunden | MontanaBlack, eliasn97, BastiGHG, NoWay4u_Sir, metashi12, krokoboss, Rezo, Knossi, rewinside, gTasty, SCHRADIN | Adresse aus Impressum, YouTube-"Über" oder Instagram-Bio nötig |
 | offen | 1UP-Kontaktformular | Zarbex, Papaplatte | selbst ausfüllen: https://1up.management/kontakt/ |
 
 Clips-Ablage: Google Drive, Ordner "GTA6 Clips".
