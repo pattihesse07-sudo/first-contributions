@@ -32,6 +32,8 @@ def main():
     ap.add_argument("--abstand", type=int, default=120, help="Mindestabstand der Kandidaten in Sekunden")
     ap.add_argument("--modell", default="small")
     ap.add_argument("--sprache", default="de")
+    ap.add_argument("--abschnitt", default=None,
+                    help="nur diesen Teil laden, z. B. 0-25000 (Sekunden); nötig bei laufenden Streams")
     a = ap.parse_args()
 
     env = dict(os.environ)
@@ -47,7 +49,8 @@ def main():
     titel = subprocess.run(["yt-dlp", "--print", "%(title)s|%(upload_date)s|%(duration)s", a.link],
                            capture_output=True, text=True, env=env).stdout.strip().split("|")
     if not ton.exists():
-        subprocess.run(["yt-dlp", "-q", "-f", "Audio_Only/ba", "-o", str(ton), a.link], check=True, env=env)
+        extra = ["--download-sections", f"*{a.abschnitt}"] if a.abschnitt else []
+        subprocess.run(["yt-dlp", "-q", "-f", "Audio_Only/ba", *extra, "-o", str(ton), a.link], check=True, env=env)
     roh = subprocess.run(["ffmpeg", "-v", "error", "-i", str(ton), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
                          capture_output=True, check=True).stdout
     x = np.frombuffer(roh, dtype=np.int16).astype(np.float32) / 32768
@@ -77,9 +80,11 @@ def main():
         seg, _ = m.transcribe(str(tmp), language=a.sprache, vad_filter=True)
         text = " ".join(s.text.strip() for s in seg)
         tmp.unlink()
-        ende = start + a.fenster
-        zeilen.append(f"| {k} | {hms(start)} | {hms(ende)} | +{sc[i] - basis:.1f} dB | {text[:400].replace('|', '/')} |"
-                      f" `python3 gta6/werkzeuge/clip.py {a.link} {hms(start)} {hms(start + 45)} --nr {a.name}-{k:02d}` |")
+        offset = float(a.abschnitt.split("-")[0]) if a.abschnitt else 0.0
+        start_vod = start + offset
+        ende = start_vod + a.fenster
+        zeilen.append(f"| {k} | {hms(start_vod)} | {hms(ende)} | +{sc[i] - basis:.1f} dB | {text[:400].replace('|', '/')} |"
+                      f" `python3 gta6/werkzeuge/clip.py {a.link} {hms(start_vod)} {hms(start_vod + 45)} --nr {a.name}-{k:02d}` |")
         print(zeilen[-1], flush=True)
 
     ziel = Path.cwd() / "gta6" / f"momente-{a.name}.md"
