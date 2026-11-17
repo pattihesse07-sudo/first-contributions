@@ -45,3 +45,13 @@ die Antwort aber je Streamer sagen, für wen sie gilt.
 - https://1up.management/kontakt/
 - https://1up.management/impressum/
 - https://www.instagram.com/gronkh/
+
+## Versandt
+
+| Datum | An | Streamer | Status |
+|---|---|---|---|
+| 17.11.2026 | business@trymacs.de | Trymacs | gesendet per Gmail, Antwort offen |
+| 17.11.2026 | hey@gronkh.tv | GRONKH | gesendet per Gmail, Antwort offen |
+| offen | 1UP-Kontaktformular | Zarbex, Papaplatte | selbst ausfüllen: https://1up.management/kontakt/ |
+
+Clips-Ablage: Google Drive, Ordner "GTA6 Clips".
