@@ -33,7 +33,8 @@ Stand 17.11.2026, getestet in der Umgebung `gta6-clipping`.
 
 - **YouTube-Downloads gehen nicht** (YouTube verlangt Anmeldung vom Cloud-Server). Für YouTube-VODs:
   Abschnitt bei dir laden und hochladen.
-- **Kick-VODs** sind nicht getestet. Fehlt ein Server, gebe ich ihn frei, sobald der Fehler auftritt.
+- **Kick-VODs** (Adin Ross) lassen sich hier nicht laden: Kick blockt automatisierte Zugriffe. Abschnitte bei dir laden.
+- Fokus-Streamer und Ladestatus: `gta6/streamer.md`.
 - Twitch-VOD-Server wechseln. Wird ein neuer Server gesperrt, gebe ich ihn frei (dauert Sekunden).
 - Ganze Mehrstunden-VODs mit Whisper zu transkribieren dauert auf der CPU lange. Momente zuerst über
   Twitch-Untertitel, Chat-Spitzen oder Lautstärke eingrenzen, dann nur Abschnitte transkribieren.
