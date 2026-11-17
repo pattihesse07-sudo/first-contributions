@@ -107,12 +107,17 @@ def ass_zeit(t):
     return f"{int(h)}:{int(m):02d}:{s:05.2f}"
 
 
+# Text-Positionen (MarginV): Untertitel von unten, Hook von oben. Beim Layout "quer" liegen beide
+# unter dem Spielbild, damit nichts vom Spiel verdeckt wird.
+POS = {"cap": 480, "hook": 1010}
+
+
 def hook_zeilen(hook, dauer=3.0):
     """Hook oben im Spielbereich, schwarze Schrift auf weißem Kasten, die ersten Sekunden."""
     if not hook:
         return ""
     stil = ("Style: Hook,DejaVu Sans,74,&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,1,0,0,0,"
-            "100,100,0,0,3,16,0,8,80,80,1010,1\n")
+            f"100,100,0,0,3,16,0,8,80,80,{POS['hook']},1\n")
     text = hook.replace("\n", "\\N")
     return stil, f"Dialogue: 1,{ass_zeit(0)},{ass_zeit(dauer)},Hook,,0,0,0,,{{\\fad(0,250)}}{text}"
 
@@ -126,11 +131,12 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,DejaVu Sans,96,&H00FFFFFF,&H0000FFFF,&H00000000,&H64000000,1,0,0,0,100,100,0,0,1,7,2,2,60,60,480,1
+Style: Cap,DejaVu Sans,96,&H00FFFFFF,&H0000FFFF,&H00000000,&H64000000,1,0,0,0,100,100,0,0,1,7,2,2,60,60,CAPMV,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+    kopf = kopf.replace("CAPMV", str(POS["cap"]))
     # Whisper liefert manchmal doppelte oder rückwärts laufende Zeiten: sortieren, Doppelte entfernen
     sauber = []
     for w in sorted(woerter, key=lambda x: x["s"]):
@@ -183,6 +189,18 @@ def schneiden(quelle, roh, layout, cam, dauer, cam_hoehe=None):
     if layout == "voll":
         vf = ("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1")
         args = ["-vf", vf]
+    elif layout == "quer":
+        # Facecam oben, darunter das komplette Spielbild im Querformat (16:9, nichts abgeschnitten),
+        # Rest des Bildes: unscharfer, abgedunkelter Hintergrund aus dem Spiel
+        cx, cy, cw, ch = (int(round(x * w / 1920)) for x in cam)
+        kh = int(cam_hoehe or 560) // 2 * 2
+        fc = (f"[0:v]split=3[q1][q2][q3];"
+              f"[q1]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+              f"boxblur=30:2,eq=brightness=-0.18,setsar=1[bg];"
+              f"[q2]crop={cw}:{ch}:{cx}:{cy},scale=-2:{kh},scale='min(iw,1040)':-2,setsar=1[cam];"
+              f"[q3]scale=1080:608,setsar=1[spiel];"
+              f"[bg][cam]overlay=(W-w)/2:60[a];[a][spiel]overlay=0:{60 + kh + 40}[v]")
+        args = ["-filter_complex", fc, "-map", "[v]", "-map", "0:a?"]
     else:
         cx, cy, cw, ch = cam
         # Werte gelten für 1920x1080; auf echte Auflösung umrechnen
@@ -223,7 +241,7 @@ def main():
     ap.add_argument("start", help="z. B. 00:12:30")
     ap.add_argument("ende", help="z. B. 00:13:15 (20 bis 60 Sekunden nach start)")
     ap.add_argument("--nr", required=True, help="Clipnummer, z. B. 01")
-    ap.add_argument("--layout", choices=["voll", "cam"], default="voll")
+    ap.add_argument("--layout", choices=["voll", "cam", "quer"], default="quer")
     ap.add_argument("--cam", default="0,0,480,270", help="Kamera x,y,b,h im 1920x1080-Bild")
     ap.add_argument("--sprache", default=None, help="de oder en; leer = automatisch")
     ap.add_argument("--modell", default="small", help="Whisper-Modell (tiny, base, small)")
@@ -237,6 +255,8 @@ def main():
     ap.add_argument("--hook", default=None, help="Hook-Text für die ersten 3 Sekunden (\\n = Zeilenumbruch)")
     a = ap.parse_args()
 
+    if a.layout == "quer":
+        POS.update(cap=250, hook=1330)
     dauer = sek(a.ende) - sek(a.start)
     if not 20 <= dauer <= 60:
         sys.exit(f"Dauer {dauer:.1f}s liegt nicht bei 20 bis 60 Sekunden.")
