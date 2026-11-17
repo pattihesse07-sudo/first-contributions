@@ -174,6 +174,8 @@ def main():
     ap.add_argument("--sprache", default=None, help="de oder en; leer = automatisch")
     ap.add_argument("--modell", default="small", help="Whisper-Modell (tiny, base, small)")
     ap.add_argument("--hoehe", type=int, default=1080)
+    ap.add_argument("--mindestlaenge", type=float, default=61,
+                    help="Kürzere Clips so oft wiederholen, bis sie länger sind (Sekunden, 0 = aus)")
     ap.add_argument("--hook", default=None, help="Hook-Text für die ersten 3 Sekunden (\\n = Zeilenumbruch)")
     a = ap.parse_args()
 
@@ -202,9 +204,22 @@ def main():
         sprache, woerter = transkript(roh, a.sprache, a.modell, env)
         wjson.write_text(json.dumps({"sprache": sprache, "woerter": woerter}, ensure_ascii=False,
                                     indent=1), encoding="utf-8")
+    # Kurze Clips mehrfach hintereinander abspielen, bis sie über der Mindestlänge liegen
+    basis = roh
+    roh_dauer = float(probe(roh)["format"]["duration"])
+    durchlaeufe = 1
+    if a.mindestlaenge and roh_dauer < a.mindestlaenge:
+        durchlaeufe = int(a.mindestlaenge // roh_dauer) + 1
+        basis = CLIPS / f"{a.nr}-roh-x{durchlaeufe}.mp4"
+        if not basis.exists():
+            run(["ffmpeg", "-n", "-v", "error", "-stream_loop", str(durchlaeufe - 1), "-i", str(roh),
+                 "-c", "copy", "-movflags", "+faststart", str(basis)])
+        woerter = [dict(w, s=w["s"] + k * roh_dauer, e=w["e"] + k * roh_dauer)
+                   for k in range(durchlaeufe) for w in woerter]
+        print(f"Clip {roh_dauer:.1f}s -> {durchlaeufe}x abgespielt = {durchlaeufe * roh_dauer:.1f}s")
     ass.unlink(missing_ok=True)
     ass_schreiben(woerter, ass, hook=a.hook)
-    run(["ffmpeg", "-n", "-v", "error", "-i", roh.name, "-vf", f"ass={ass.name}",
+    run(["ffmpeg", "-n", "-v", "error", "-i", basis.name, "-vf", f"ass={ass.name}",
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
          "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000",
          "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", fertig.name], cwd=CLIPS)

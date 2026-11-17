@@ -26,6 +26,10 @@ Stand 17.11.2026, getestet in der Umgebung `gta6-clipping`.
 
    Ergebnis: `gta6/clips/<nr>-fertig.mp4`, dazu `<nr>.ass` und `<nr>-woerter.json`.
 
+   Clips unter 61 Sekunden werden automatisch so oft hintereinander abgespielt, bis sie länger sind
+   (Untertitel laufen mit, Hook nur beim ersten Durchlauf). Abschalten mit `--mindestlaenge 0`, zum
+   Beispiel wenn eine Kampagne eine Höchstlänge vorgibt (`/regel-check` prüft das).
+
    Untertitel korrigieren und Hook einbauen: Wörter in `<nr>-woerter.json` von Hand berichtigen
    (unsichere Wörter lieber streichen), `<nr>-fertig.mp4` löschen und den Befehl mit
    `--hook 'Zeile 1\nZeile 2'` erneut starten. Vorhandene Wörter werden dann übernommen.
