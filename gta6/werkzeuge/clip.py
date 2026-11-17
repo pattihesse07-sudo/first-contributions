@@ -176,7 +176,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     pfad.write_text(kopf + "\n".join(zeilen) + "\n", encoding="utf-8")
 
 
-def schneiden(quelle, roh, layout, cam, dauer):
+def schneiden(quelle, roh, layout, cam, dauer, cam_hoehe=None):
     info = probe(quelle)
     v = next(s for s in info["streams"] if s["codec_type"] == "video")
     w, h = v["width"], v["height"]
@@ -196,9 +196,21 @@ def schneiden(quelle, roh, layout, cam, dauer):
             spiel = f"crop={cx}:{h}:0:0,"
         else:
             spiel = f"crop={w - cx - cw}:{h}:{cx + cw}:0,"
-        fc = (f"[0:v]crop={cw}:{ch}:{cx}:{cy},scale=1080:{kh}:force_original_aspect_ratio=increase,"
-              f"crop=1080:{kh},setsar=1[cam];[0:v]{spiel}scale=1080:{sh}:force_original_aspect_ratio=increase,"
-              f"crop=1080:{sh},setsar=1[spiel];[cam][spiel]vstack[v]")
+        if cam_hoehe:
+            # Kleiner Kamerastreifen: Kamera vollständig (nicht beschnitten) mittig, dahinter unscharfes Spielbild
+            kh = int(cam_hoehe) // 2 * 2
+            sh = 1920 - kh
+            fc = (f"[0:v]split=3[q1][q2][q3];"
+                  f"[q1]crop={cw}:{ch}:{cx}:{cy},scale=-2:{kh},setsar=1[cam];"
+                  f"[q2]{spiel}scale=1080:{kh}:force_original_aspect_ratio=increase,crop=1080:{kh},"
+                  f"boxblur=20:2,eq=brightness=-0.08,setsar=1[bg];"
+                  f"[bg][cam]overlay=(W-w)/2:0[oben];"
+                  f"[q3]{spiel}scale=1080:{sh}:force_original_aspect_ratio=increase,crop=1080:{sh},setsar=1[spiel];"
+                  f"[oben][spiel]vstack[v]")
+        else:
+            fc = (f"[0:v]crop={cw}:{ch}:{cx}:{cy},scale=1080:{kh}:force_original_aspect_ratio=increase,"
+                  f"crop=1080:{kh},setsar=1[cam];[0:v]{spiel}scale=1080:{sh}:force_original_aspect_ratio=increase,"
+                  f"crop=1080:{sh},setsar=1[spiel];[cam][spiel]vstack[v]")
         args = ["-filter_complex", fc, "-map", "[v]", "-map", "0:a?"]
     run(["ffmpeg", "-n", "-v", "error", "-i", str(quelle), *args, "-t", str(dauer),
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
@@ -216,7 +228,9 @@ def main():
     ap.add_argument("--sprache", default=None, help="de oder en; leer = automatisch")
     ap.add_argument("--modell", default="small", help="Whisper-Modell (tiny, base, small)")
     ap.add_argument("--hoehe", type=int, default=1080)
-    ap.add_argument("--zooms", type=int, default=3, help="Anzahl Punch-in-Zooms an lauten Stellen (0 = aus)")
+    ap.add_argument("--zooms", type=int, default=0, help="Anzahl Punch-in-Zooms an lauten Stellen (0 = aus)")
+    ap.add_argument("--cam-hoehe", type=int, default=600,
+                    help="Höhe des Facecam-Streifens in Pixeln (kleiner = mehr Spiel; 0 = altes Layout)")
     ap.add_argument("--mindestlaenge", type=float, default=0,
                     help="Kürzere Clips so oft wiederholen, bis sie länger sind (Sekunden, 0 = aus)")
     ap.add_argument("--credit", default=None, help="Quellenangabe, die durchgehend unten steht")
@@ -238,7 +252,7 @@ def main():
 
     quelle = laden(a.link, a.start, a.ende, a.nr, a.hoehe, env)
     if not roh.exists():
-        schneiden(quelle, roh, a.layout, [int(x) for x in a.cam.split(",")], dauer)
+        schneiden(quelle, roh, a.layout, [int(x) for x in a.cam.split(",")], dauer, a.cam_hoehe)
     if wjson.exists():
         # Vorhandene (ggf. von Hand korrigierte) Wörter weiterverwenden
         d = json.loads(wjson.read_text(encoding="utf-8"))
