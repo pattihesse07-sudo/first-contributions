@@ -25,6 +25,10 @@ Stand 17.11.2026, getestet in der Umgebung `gta6-clipping`.
    ```
 
    Ergebnis: `gta6/clips/<nr>-fertig.mp4`, dazu `<nr>.ass` und `<nr>-woerter.json`.
+
+   Untertitel korrigieren und Hook einbauen: Wörter in `<nr>-woerter.json` von Hand berichtigen
+   (unsichere Wörter lieber streichen), `<nr>-fertig.mp4` löschen und den Befehl mit
+   `--hook 'Zeile 1\nZeile 2'` erneut starten. Vorhandene Wörter werden dann übernommen.
 4. `/hook-schreiber`, `/caption-und-hashtags`, `/regel-check`.
 5. **Du postest** auf TikTok bzw. YouTube Shorts und reichst den Link in der Kampagne ein
    (bei Content Rewards innerhalb von 30 Minuten, Werbekennzeichnung beachten).

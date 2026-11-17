@@ -84,7 +84,17 @@ def ass_zeit(t):
     return f"{int(h)}:{int(m):02d}:{s:05.2f}"
 
 
-def ass_schreiben(woerter, pfad, max_woerter=3):
+def hook_zeilen(hook, dauer=3.0):
+    """Hook oben im Spielbereich, schwarze Schrift auf weißem Kasten, die ersten Sekunden."""
+    if not hook:
+        return ""
+    stil = ("Style: Hook,DejaVu Sans,74,&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,1,0,0,0,"
+            "100,100,0,0,3,16,0,8,80,80,1010,1\n")
+    text = hook.replace("\n", "\\N")
+    return stil, f"Dialogue: 1,{ass_zeit(0)},{ass_zeit(dauer)},Hook,,0,0,0,,{{\\fad(0,250)}}{text}"
+
+
+def ass_schreiben(woerter, pfad, max_woerter=3, hook=None):
     kopf = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -117,6 +127,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 ("{\\c&H0000FFFF&}" + x["w"].upper() + "{\\c&H00FFFFFF&}") if j == i else x["w"].upper()
                 for j, x in enumerate(g))
             zeilen.append(f"Dialogue: 0,{ass_zeit(w['s'])},{ass_zeit(ende)},Cap,,0,0,0,,{text}")
+    if hook:
+        stil, zeile = hook_zeilen(hook)
+        kopf = kopf.replace("\n[Events]", stil + "\n[Events]")
+        zeilen.append(zeile)
     pfad.write_text(kopf + "\n".join(zeilen) + "\n", encoding="utf-8")
 
 
@@ -160,6 +174,7 @@ def main():
     ap.add_argument("--sprache", default=None, help="de oder en; leer = automatisch")
     ap.add_argument("--modell", default="small", help="Whisper-Modell (tiny, base, small)")
     ap.add_argument("--hoehe", type=int, default=1080)
+    ap.add_argument("--hook", default=None, help="Hook-Text für die ersten 3 Sekunden (\\n = Zeilenumbruch)")
     a = ap.parse_args()
 
     dauer = sek(a.ende) - sek(a.start)
@@ -178,10 +193,17 @@ def main():
     quelle = laden(a.link, a.start, a.ende, a.nr, a.hoehe, env)
     if not roh.exists():
         schneiden(quelle, roh, a.layout, [int(x) for x in a.cam.split(",")], dauer)
-    sprache, woerter = transkript(roh, a.sprache, a.modell, env)
-    wjson.write_text(json.dumps({"sprache": sprache, "woerter": woerter}, ensure_ascii=False, indent=1),
-                     encoding="utf-8")
-    ass_schreiben(woerter, ass)
+    if wjson.exists():
+        # Vorhandene (ggf. von Hand korrigierte) Wörter weiterverwenden
+        d = json.loads(wjson.read_text(encoding="utf-8"))
+        sprache, woerter = d["sprache"], d["woerter"]
+        print(f"Nutze vorhandene Wörter aus {wjson}")
+    else:
+        sprache, woerter = transkript(roh, a.sprache, a.modell, env)
+        wjson.write_text(json.dumps({"sprache": sprache, "woerter": woerter}, ensure_ascii=False,
+                                    indent=1), encoding="utf-8")
+    ass.unlink(missing_ok=True)
+    ass_schreiben(woerter, ass, hook=a.hook)
     run(["ffmpeg", "-n", "-v", "error", "-i", roh.name, "-vf", f"ass={ass.name}",
          "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
          "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000",
